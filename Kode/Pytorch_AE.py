@@ -24,9 +24,14 @@ split = input("Enter the type of split (federated, full, limited): ")
 path = input("Enter the path to the model (\"\" for new model, \"Test\" for no model): ")
 
 import neptune
-run = neptune.init_run(project='momkeybomkey/Federated',
-                       api_token='eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJjNDdlN2ZhNy00ZmJmLTQ4YjMtYTk0YS1lNmViZmZjZWRhNzUifQ==',
-                       tags=[f'split-{n}', split])
+if path != "Test":
+    run = neptune.init_run(project='momkeybomkey/Federated',
+                           api_token='eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJjNDdlN2ZhNy00ZmJmLTQ4YjMtYTk0YS1lNmViZmZjZWRhNzUifQ==',
+                           tags=[f'split-{n}', split])
+else:
+    run = neptune.init_run(project='momkeybomkey/Federated',
+                           api_token='eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJjNDdlN2ZhNy00ZmJmLTQ4YjMtYTk0YS1lNmViZmZjZWRhNzUifQ==',
+                           tags=[f'split-{n}', split, 'too short'])
 
 # Check for GPU
 if torch.cuda.is_available():
