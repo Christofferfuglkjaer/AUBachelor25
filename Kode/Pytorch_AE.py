@@ -82,8 +82,8 @@ def get_loader(dataset, random):
         return _collate_fn(data)
 
 # Function to generate noise
-def generate_noise(data, noise_factor = 0.2):
-    data += noise_factor * np.random.normal(size=data.shape)
+def generate_noise(data, noise_factor = 0.08):
+    data += noise_factor * (np.random.normal(size=data.shape) + np.random.poisson(data) / 255)
     data = np.clip(data, 0., 1.)
     return data
 
@@ -92,7 +92,7 @@ def even_data(split):
     min_size = min([len(data) for data in split])
     return [data[:min_size] for data in split]
 
-def split_data(data, n, noise_factor = 0.1):
+def split_data(data, n, noise_factor = 0.08):
     m = len(data)
     data_copy = copy.deepcopy(data)
     clean_split = []
