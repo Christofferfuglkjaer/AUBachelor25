@@ -36,10 +36,10 @@ else:
 # Check for GPU
 if torch.cuda.is_available():
     device = torch.device('cuda')
-    print('', 'Using GPU', '')
+    print('\nUsing GPU\n')
 else:
     device = torch.device('cpu')
-    print('', 'Using CPU', '')
+    print('\nUsing CPU\n')
 
 # Functions to load data
 def _collate_fn(data):
@@ -175,15 +175,15 @@ class AE(torch.nn.Module):
             torch.nn.ReLU(),
             torch.nn.Conv2d(32, 64, 3, stride=2, padding=1),
             torch.nn.ReLU(),
-            torch.nn.Conv2d(64, 64, 3, stride=2, padding=1),
+            torch.nn.Conv2d(64, 128, 3, stride=2, padding=1),
             torch.nn.Flatten(0, -1),
-            torch.nn.Linear(64 * 14 * 14, 128)
+            torch.nn.Linear(128 * 14 * 14, 256)
         )
 
         self.decoder = torch.nn.Sequential(
-            torch.nn.Linear(128, 64 * 14 * 14),
-            torch.nn.Unflatten(0, (64, 14, 14)),
-            torch.nn.ConvTranspose2d(64, 64, 3, stride=2, padding=1, output_padding=1),
+            torch.nn.Linear(256, 128 * 14 * 14),
+            torch.nn.Unflatten(0, (128, 14, 14)),
+            torch.nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1, output_padding=1),
             torch.nn.ReLU(),
             torch.nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1, output_padding=1),
             torch.nn.ReLU(),
@@ -229,6 +229,9 @@ def run_model(m, epochs):
     # For the stupid overfitting check
     min_loss = 1
     overfitter = 0
+
+    # Timing
+    start = time.time()
     
     # Train the networks
     for epoch in range(epochs):
@@ -290,6 +293,14 @@ def run_model(m, epochs):
         if epoch % 10 == 0 and epoch != 0 and path != "Test":
             torch.save(autoencoder.state_dict(), f"./Models/model_{n}_{split}_{epoch + 1}.pth")
 
+        # Timing
+        end = time.time()
+        print(f"Time so far: {time.strftime('%H:%M:%S', time.gmtime(end - start))}")
+        diff = (end - start) / (epoch + 1) * epochs
+        print(f"Time left: {time.strftime('%H:%M:%S', time.gmtime(diff - (end - start)))}")
+        print(f"Estimated end: {time.strftime('%H:%M:%S', time.localtime(start + diff))}")
+        print("")
+
         # Stupid check for overfitting
         if total_loss < min_loss:
             min_loss = total_loss
@@ -301,6 +312,8 @@ def run_model(m, epochs):
     
     neptune_val_images(autoencoder)
 
+    run["time"] = time.strftime('%H:%M:%S', time.gmtime(diff))
+
     if path != "Test":
         try:
             torch.save(autoencoder.state_dict(), path)
@@ -309,11 +322,5 @@ def run_model(m, epochs):
 
     return autoencoder
 
-t0 = time.time()
 autoendocer = run_model(m, epochs)
-t1 = time.time()
-print("")
-print(f"Time: {t1 - t0}")
-print("")
-run["time"].append(t1 - t0)
 run.stop()
