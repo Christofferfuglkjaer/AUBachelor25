@@ -1,7 +1,7 @@
 import sys
 import subprocess
 # implement pip as a subprocess:
-dependencies = ['numpy', 'neptune', 'medmnist']
+dependencies = ['numpy', 'neptune', 'medmnist', 'pytorch-msssim']
 for dependency in dependencies:
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', dependency])
 

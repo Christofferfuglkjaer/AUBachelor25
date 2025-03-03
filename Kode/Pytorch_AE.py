@@ -1,8 +1,12 @@
+# "C:\Users\malth\OneDrive - Aarhus universitet\6. Semester\Bachelor projekt\AUBachelor25\Kode\Pytorch_AE.py"
+
 import numpy as np
 from medmnist import PneumoniaMNIST
 import torch
 import random
 import copy
+import time
+from pytorch_msssim import ms_ssim
 
 # Number of clients
 n = input("Enter the number of clients: ")
@@ -17,7 +21,7 @@ epochs = int(epochs)
 split = input("Enter the type of split (federated, full, limited): ")
 
 # Load model
-path = input("Enter the path to the model ("" for no model): ")
+path = input("Enter the path to the model (\"\" for new model, \"Test\" for no model): ")
 
 import neptune
 run = neptune.init_run(project='momkeybomkey/Federated',
@@ -27,8 +31,10 @@ run = neptune.init_run(project='momkeybomkey/Federated',
 # Check for GPU
 if torch.cuda.is_available():
     device = torch.device('cuda')
+    print('', 'Using GPU', '')
 else:
     device = torch.device('cpu')
+    print('', 'Using CPU', '')
 
 # Functions to load data
 def _collate_fn(data):
@@ -111,9 +117,9 @@ def split_data(data, n, noise_factor = 0.1):
     return clean_split, noisy_split
 
 # Download data
-train = PneumoniaMNIST(split="train", download=True, size=128)
-test = PneumoniaMNIST(split="test", download=True, size=128)
-val = PneumoniaMNIST(split="val", download=True, size=128)
+train = PneumoniaMNIST(split="train", download=True, size=224)
+test = PneumoniaMNIST(split="test", download=True, size=224)
+val = PneumoniaMNIST(split="val", download=True, size=224)
 # Load data
 train_loader = get_loader(train, random=True)
 test_loader = get_loader(test, random=True)
@@ -122,10 +128,15 @@ val_loader = get_loader(val, random=False)
 # Split validation data
 val_clean, val_noisy = split_data(val_loader, 1)
 # Loss function
-loss_fn = torch.nn.MSELoss()
+def loss_fn(recon_x, x, alpha = 0.84):
+    L1Loss = torch.nn.L1Loss()
+    L1 = L1Loss(recon_x, x)
+    MS_SSIM = 1 - ms_ssim(recon_x.unsqueeze(0), x.unsqueeze(0), data_range=1, size_average=True)
+    return alpha * MS_SSIM + (1 - alpha) * L1
 # Function for PSNR
 def PSNR(y_true, y_pred):
-    return 20 * torch.log10(torch.max(y_true) / loss_fn(y_true, y_pred))
+    mse_loss = torch.nn.MSELoss()
+    return 20 * torch.log10(torch.max(y_true) / mse_loss(y_true, y_pred))
 # Log during traning
 def neptune_log(epoch, model, loss, psnr):
     print("Evaluation")
@@ -161,12 +172,12 @@ class AE(torch.nn.Module):
             torch.nn.ReLU(),
             torch.nn.Conv2d(64, 64, 3, stride=2, padding=1),
             torch.nn.Flatten(0, -1),
-            torch.nn.Linear(64 * 8 * 8, 128)
+            torch.nn.Linear(64 * 14 * 14, 128)
         )
 
         self.decoder = torch.nn.Sequential(
-            torch.nn.Linear(128, 64 * 8 * 8),
-            torch.nn.Unflatten(0, (64, 8, 8)),
+            torch.nn.Linear(128, 64 * 14 * 14),
+            torch.nn.Unflatten(0, (64, 14, 14)),
             torch.nn.ConvTranspose2d(64, 64, 3, stride=2, padding=1, output_padding=1),
             torch.nn.ReLU(),
             torch.nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1, output_padding=1),
@@ -186,7 +197,7 @@ def run_model(m, epochs):
     # Make overall model
     autoencoder = AE()
     autoencoder.to(device)
-    if path != "":
+    if path != "Test":
         try:
             autoencoder.load_state_dict(torch.load(path))
         except:
@@ -209,6 +220,10 @@ def run_model(m, epochs):
     for model in models:
         model.to(device)
         model.load_state_dict(primary_weights)
+
+    # For the stupid overfitting check
+    min_loss = 1
+    overfitter = 0
     
     # Train the networks
     for epoch in range(epochs):
@@ -267,16 +282,33 @@ def run_model(m, epochs):
 
         neptune_log(epoch, autoencoder, total_loss, total_psnr)
 
-        if epoch % 10 == 0:
+        if epoch % 10 == 0 and epoch != 0 and path != "Test":
             torch.save(autoencoder.state_dict(), f"./Models/model_{n}_{split}_{epoch + 1}.pth")
+
+        # Stupid check for overfitting
+        if total_loss < min_loss:
+            min_loss = total_loss
+            overfitter = 0
+        else:
+            overfitter += 1
+            if overfitter > 10:
+                break
     
     neptune_val_images(autoencoder)
 
-    if path != "":
-        torch.save(autoencoder.state_dict(), path)
-    else:
-        torch.save(autoencoder.state_dict(), f"./Models/model_{n}_{split}.pth")
+    if path != "Test":
+        try:
+            torch.save(autoencoder.state_dict(), path)
+        except:
+            torch.save(autoencoder.state_dict(), f"./Models/model_{n}_{split}.pth")
 
     return autoencoder
 
+t0 = time.time()
 autoendocer = run_model(m, epochs)
+t1 = time.time()
+print("")
+print(f"Time: {t1 - t0}")
+print("")
+run["time"].append(t1 - t0)
+run.stop()
